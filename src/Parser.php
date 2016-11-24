@@ -166,8 +166,8 @@ class Parser
      * Parse the query parameters with the given options.
      * Either for a single dataset or multiple.
      *
-     * @param  mixed    $options
-     * @param  boolean  $multiple
+     * @param  mixed $options
+     * @param  boolean $multiple
      * @return void
      */
     public function parse($options, $multiple = false)
@@ -252,7 +252,7 @@ class Parser
     /**
      * Get a parameter
      *
-     * @param  string         $param
+     * @param  string $param
      * @return string|boolean
      */
     protected function getParam($param)
@@ -288,7 +288,7 @@ class Parser
     /**
      * Parse the fields parameter and return an array of fields
      *
-     * @param  string     $fieldsParam
+     * @param  string $fieldsParam
      * @return void
      */
     protected function parseFields($fieldsParam)
@@ -520,45 +520,69 @@ class Parser
             }
 
             $column = $keyMatches[2];
+            $relatedColumn = explode("__", $column);
 
-            if ($comparator == 'IN') {
-                $values = explode(',', $filterParamValue);
 
-                $this->query->whereIn($column, $values);
-            } else if ($comparator == 'NOT IN') {
-                $values = explode(',', $filterParamValue);
-
-                $this->query->whereNotIn($column, $values);
+            if (count($relatedColumn) > 1) {
+                $this->builder->whereHas($relatedColumn[0], function ($query) use ($relatedColumn, $filterParamValue, $comparator) {
+                    $this->doFilter($query, $relatedColumn[1], $filterParamValue, $comparator);
+                });
             } else {
-                $values = explode('|', $filterParamValue);
+                $this->doFilter($this->query, $column, $filterParamValue, $comparator);
+            }
 
-                if (count($values) > 1) {
-                    $this->query->where(function ($query) use ($column, $comparator, $values) {
-                        foreach ($values as $value) {
-                            if ($comparator == 'LIKE' || $comparator == 'NOT LIKE') {
-                                $value = preg_replace('/(^\*|\*$)/', '%', $value);
-                            }
+        }
+    }
 
-                            //Link the filters with AND of there is a "not" and with OR if there's none
-                            if ($comparator == '!=' || $comparator == 'NOT LIKE') {
-                                $query->where($column, $comparator, $value);
-                            } else {
-                                $query->orWhere($column, $comparator, $value);
-                            }
+
+    /**
+     * Adds the specified filter to a query
+     *
+     * @param $query
+     * @param $column
+     * @param $filterParamValue
+     * @param $comparator
+     */
+    protected function doFilter($query, $column, $filterParamValue, $comparator)
+    {
+
+        if ($comparator == 'IN') {
+            $values = explode(',', $filterParamValue);
+
+            $query->whereIn($column, $values);
+        } else if ($comparator == 'NOT IN') {
+            $values = explode(',', $filterParamValue);
+
+            $query->whereNotIn($column, $values);
+        } else {
+            $values = explode('|', $filterParamValue);
+
+            if (count($values) > 1) {
+                $query->where(function ($query) use ($column, $comparator, $values) {
+                    foreach ($values as $value) {
+                        if ($comparator == 'LIKE' || $comparator == 'NOT LIKE') {
+                            $value = preg_replace('/(^\*|\*$)/', '%', $value);
                         }
-                    });
+
+                        //Link the filters with AND of there is a "not" and with OR if there's none
+                        if ($comparator == '!=' || $comparator == 'NOT LIKE') {
+                            $query->where($column, $comparator, $value);
+                        } else {
+                            $query->orWhere($column, $comparator, $value);
+                        }
+                    }
+                });
+            } else {
+                $value = $values[0];
+
+                if ($comparator == 'LIKE' || $comparator == 'NOT LIKE') {
+                    $value = preg_replace('/(^\*|\*$)/', '%', $value);
+                }
+
+                if ($comparator == 'NULL' || $comparator == 'NOT NULL') {
+                    $query->whereNull($column, 'and', $comparator == 'NOT NULL');
                 } else {
-                    $value = $values[0];
-
-                    if ($comparator == 'LIKE' || $comparator == 'NOT LIKE') {
-                        $value = preg_replace('/(^\*|\*$)/', '%', $value);
-                    }
-
-                    if ($comparator == 'NULL' || $comparator == 'NOT NULL') {
-                        $this->query->whereNull($column, 'and', $comparator == 'NOT NULL');
-                    } else {
-                        $this->query->where($column, $comparator, $value);
-                    }
+                    $query->where($column, $comparator, $value);
                 }
             }
         }
@@ -568,7 +592,7 @@ class Parser
      * Parse the fulltext search parameter q
      *
      * @param  string $qParam
-     * @param  array  $fullTextSearchColumns
+     * @param  array $fullTextSearchColumns
      * @return void
      */
     protected function parseFullTextSearch($qParam, $fullTextSearchColumns)
@@ -690,8 +714,8 @@ class Parser
      * Check if there exists a method marked with the "@Relation"
      * annotation on the given model.
      *
-     * @param  Illuminate\Database\Eloquent\Model  $model
-     * @param  string                              $relationName
+     * @param  Illuminate\Database\Eloquent\Model $model
+     * @param  string $relationName
      * @return boolean
      */
     protected function isRelation($model, $relationName)
