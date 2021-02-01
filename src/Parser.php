@@ -328,7 +328,7 @@ class Parser
     protected function parseWith($withParam)
     {
         $fields = $this->query->columns;
-        $fieldsCount = count($fields);
+        $fieldsCount = count($fields ?: []);
         $baseModel = $this->builder->getModel();
 
         $withHistory = [];
@@ -391,7 +391,10 @@ class Parser
                     $firstKey = $relation->getQualifiedParentKeyName();
                     $secondKey = $relation->getRelated()->getQualifiedKeyName();
                 } else if ($relationType === 'HasManyThrough') {
-                    if (method_exists($relation, 'getExistenceCompareKey')) {
+                    if (method_exists($relation, 'getQualifiedLocalKeyName')) {
+                        $firstKey = $relation->getQualifiedLocalKeyName();
+                    } else if (method_exists($relation, 'getExistenceCompareKey')) {
+                        // compatibility for laravel 5.4
                         $firstKey = $relation->getExistenceCompareKey();
                     } else {
                         // compatibility for laravel < 5.4
@@ -449,7 +452,7 @@ class Parser
         $this->builder->with($withsArr);
 
         //Merge the base fields
-        if (count($fields) > 0) {
+        if (count($fields ?: []) > 0) {
             if (!is_array($this->query->columns)) {
                 $this->query->columns = [];
             }
@@ -649,9 +652,9 @@ class Parser
                 }
             } else if ($cat == 'meta') {
                 if ($option == 'total-count') {
-                    $this->meta[] = new CountMetaProvider('Meta-Total-Count', $this->originalQuery);
+                    $this->meta[] = new CountMetaProvider('Meta-Total-Count', $this->originalBuilder);
                 } else if ($option == 'filter-count') {
-                    $this->meta[] = new CountMetaProvider('Meta-Filter-Count', $this->query);
+                    $this->meta[] = new CountMetaProvider('Meta-Filter-Count', $this->builder);
                 }
             } else if ($cat == 'response') {
                 if ($option == 'envelope') {
@@ -728,14 +731,15 @@ class Parser
      * Get the qualified column name
      *
      * @param  string $column
+     * @param  null   $table
      * @return string
      */
     protected function getQualifiedColumnName($column, $table = null)
     {
         //Check whether there is a matching column expression that contains an 
         //alias and should therefore not be turned into a qualified column name.
-        $isAlias = count(array_filter($this->query->columns ?: [], function($column) {
-            return stripos($column, ' as ') !== false;
+        $isAlias = count(array_filter($this->query->columns ?: [], function($queryColumn) use ($column) {
+            return preg_match('/.*[\s\'"`]as\s*[\s\'"`]' . $column . '[\'"`]?$/', trim($queryColumn));
         })) > 0;
 
         if (strpos($column, '.') === false && !$isAlias) {
