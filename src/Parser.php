@@ -281,7 +281,7 @@ class Parser
         $prefix = $this->prefix;
 
         $filterParams = array_diff_ukey($this->params, $reserved, function ($a, $b) use ($prefix) {
-            return $a != $prefix.$b;
+            return strnatcmp($a, $prefix.$b);
         });
 
         if (count($filterParams) > 0) {
